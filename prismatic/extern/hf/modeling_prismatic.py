@@ -503,8 +503,17 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         # Compute vocab size for de-tokenization -- revert added "multiple of"
         self.vocab_size = self.config.text_config.vocab_size - self.config.pad_to_multiple_of
 
-        # Set default action dimension
-        self.default_action_dim = 7  # Assuming action dimension is 7
+        # Identity unnormalization stats for the base model on Libero dataset
+        self.identity_unnormalization_stats = {
+            "mask": [False] * 7,
+            "max": [1.0] * 7,
+            "mean": [0.0] * 7,
+            "min": [0.0] * 7,
+            "q01": [0.0] * 7,
+            "q99": [1.0] * 7,
+            "std": [1.0] * 7,
+        }
+        self.libero_eval_base_model_warning_displayed = False
 
     def predict_action(
         self, input_ids: Optional[torch.LongTensor] = None, unnorm_key: Optional[str] = None, **kwargs: str
@@ -521,34 +530,24 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         generated_ids = self.generate(input_ids, max_new_tokens=self.get_action_dim(unnorm_key), **kwargs)
 
         # Extract predicted action tokens and translate into (normalized) continuous actions
-        action_dim = self.get_action_dim(unnorm_key)
-        predicted_action_token_ids = generated_ids[0, -action_dim:].cpu().numpy()
+        predicted_action_token_ids = generated_ids[0, -self.get_action_dim(unnorm_key):].cpu().numpy()
         discretized_actions = self.vocab_size - predicted_action_token_ids
         discretized_actions = np.clip(discretized_actions - 1, a_min=0, a_max=self.bin_centers.shape[0] - 1)
         normalized_actions = self.bin_centers[discretized_actions]
 
-        # Unnormalize actions if stats are available
+        # Unnormalize actions
         action_norm_stats = self.get_action_stats(unnorm_key)
-        if action_norm_stats is not None:
-            mask = action_norm_stats.get("mask", np.ones_like(action_norm_stats["q01"], dtype=bool))
-            action_high, action_low = np.array(action_norm_stats["q99"]), np.array(action_norm_stats["q01"])
-            actions = np.where(
-                mask,
-                0.5 * (normalized_actions + 1) * (action_high - action_low) + action_low,
-                normalized_actions,
-            )
-        else:
-            # Norm stats not available, return normalized actions directly
-            actions = normalized_actions
+        mask = action_norm_stats.get("mask", np.ones_like(action_norm_stats["q01"], dtype=bool))
+        action_high, action_low = np.array(action_norm_stats["q99"]), np.array(action_norm_stats["q01"])
+        actions = np.where(
+            mask,
+            0.5 * (normalized_actions + 1) * (action_high - action_low) + action_low,
+            normalized_actions,
+        )
 
         return actions
 
-    @staticmethod
-    def _check_unnorm_key(norm_stats: Dict[str, Dict[str, Any]], unnorm_key: Optional[str]) -> Optional[str]:
-        if not norm_stats:
-            # Norm stats are not available
-            return None
-
+    def _check_unnorm_key(self, norm_stats: Dict[str, Dict[str, Any]], unnorm_key: Optional[str]) -> str:
         if unnorm_key is None:
             assert len(norm_stats) == 1, (
                 f"Your model was trained on more than one dataset, "
@@ -556,6 +555,19 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 f"used for un-normalizing actions: {norm_stats.keys()}"
             )
             unnorm_key = next(iter(norm_stats.keys()))
+
+        # Inject identity stats if unnorm_key is for Libero and not present
+        if ('libero' in unnorm_key) and (unnorm_key not in norm_stats):
+            if not self.libero_eval_base_model_warning_displayed:
+                print(
+                    "WARNING: Running the base OpenVLA model on a Libero evaluation dataset without unnormalizing stats. "
+                    "If this is intentional (i.e., you're testing the base model on the Libero eval without normalization), "
+                    "you can ignore this message. Otherwise, please verify that the correct model and normalization settings are in use."
+                )
+                self.libero_eval_base_model_warning_displayed = True
+
+            # Manually add identity unnormalization stats
+            self.norm_stats[unnorm_key] = {"action": self.identity_unnormalization_stats}
 
         assert unnorm_key in norm_stats, (
             f"The `unnorm_key` you chose is not in the set of available dataset statistics, "
@@ -566,17 +578,9 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
     def get_action_dim(self, unnorm_key: Optional[str] = None) -> int:
         """Get the dimensionality of the policy's action space."""
         unnorm_key = self._check_unnorm_key(self.norm_stats, unnorm_key)
-        if unnorm_key is None:
-            # Norm stats not available, return default action dimension
-            return self.default_action_dim
-        else:
-            return len(self.norm_stats[unnorm_key]["action"]["q01"])
+        return len(self.norm_stats[unnorm_key]["action"]["q01"])
 
-    def get_action_stats(self, unnorm_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_action_stats(self, unnorm_key: Optional[str] = None) -> Dict[str, Any]:
         """Get all the logged statistics for the given dataset."""
         unnorm_key = self._check_unnorm_key(self.norm_stats, unnorm_key)
-        if unnorm_key is None:
-            # Norm stats not available
-            return None
-        else:
-            return self.norm_stats[unnorm_key]["action"]
+        return self.norm_stats[unnorm_key]["action"]
