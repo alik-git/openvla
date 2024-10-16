@@ -58,13 +58,9 @@ def get_vla(cfg):
 
     # Load dataset stats used during finetuning (for action un-normalization).
     dataset_statistics_path = os.path.join(cfg.pretrained_checkpoint, "dataset_statistics.json")
-    print(f"DEBUG: dataset statistics file is here: {dataset_statistics_path}")
     if os.path.isfile(dataset_statistics_path):
-        print(f"DEBUG: and the file exists")
         with open(dataset_statistics_path, "r") as f:
             norm_stats = json.load(f)
-        print("DEBUG: norm stats here")
-        print(norm_stats)
         vla.norm_stats = norm_stats
     else:
         print(
