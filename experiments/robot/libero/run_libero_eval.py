@@ -15,20 +15,6 @@ Usage:
         --use_wandb [ True | False ] \
         --wandb_project <PROJECT> \
         --wandb_entity <ENTITY>
-
-python experiments/robot/libero/run_libero_eval.py \
---model_family openvla \
---pretrained_checkpoint openvla/openvla-7b-finetuned-libero-object \
---task_suite_name libero_object \
---center_crop True \
---num_trials_per_task 5
-
-python experiments/robot/libero/run_libero_eval.py \
---model_family openvla \
---pretrained_checkpoint openvla/openvla-7b \
---task_suite_name libero_object \
---center_crop True \
---num_trials_per_task 5
 """
 
 import os
