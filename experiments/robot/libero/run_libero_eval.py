@@ -123,6 +123,11 @@ def eval_libero(cfg: GenerateConfig) -> None:
         # with the suffix "_no_noops" in the dataset name)
         if cfg.unnorm_key not in model.norm_stats and f"{cfg.unnorm_key}_no_noops" in model.norm_stats:
             cfg.unnorm_key = f"{cfg.unnorm_key}_no_noops"
+        
+        # Here the default OpenVLA code checks that the unnorm key is available in the model.norm_stats
+        # However if we want to run the base OpenVLA model (i.e. not finetuned on Libero) to see how it performs, we need to disable this assertion check
+        # This is because there is no "unnormalizing stats" for the base model, it only exists for the fine tuned models
+        # In other words, uncomment the assertion below if you only want to run the fine-tuned model on the libero evals
         # assert cfg.unnorm_key in model.norm_stats, f"Action un-norm key {cfg.unnorm_key} not found in VLA `norm_stats`!"
 
     # [OpenVLA] Get Hugging Face processor
