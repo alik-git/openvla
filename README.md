@@ -1,3 +1,53 @@
+# Ali's notes on OpenVLA's LIBERO Simulation Benchmark Evaluations
+Date: Oct 16 2024
+
+### Reproducing the finetuned model results
+
+First off, I simply tried to reproduce their libero results following instructions in their README [here](https://github.com/openvla/openvla/tree/main?tab=readme-ov-file#libero-simulation-benchmark-evaluations). This went smoothly and my results matched the offical ones for evals I ran. 
+
+**NOTE:** I didn't actually re-run all the evals since there are a lot of them, 3 random seeds * 500 rollouts for each type of task in (spatial, object, goal, long). But just in case, I did run 200 episodes of Libero Spatial and the success rate was 88% compared to the claimed 84.7% ± 0.9% which is reasonable.
+
+See the output from the logs: 
+```
+# episodes completed so far: 200
+# successes: 174 (87.0%)
+Current task success rate: 0.88
+Current total success rate: 0.87
+```
+
+This is great, but also expected since each model checkpoint is fine-tuned to that specific LIBERO task type. This raises the question of how well OpenVLA can generalize to these tasks without finetuning.
+
+## Running the base model on the LIBERO benchmark
+
+#### Dealing with the missing dataset statistics file
+If you try to run the base OpenVLA model on Libero, the code throws various errors when predicting actions due to a missing `dataset_statistics.json` file. This is because the action labels are normalized during training (in this case, fine tuning on LIBERO) for stability, and so during deployment the model's output needs to be unnormalized before being used. But these statistics simply don't exist for a non-finetuned model, which crashes the code. I had to make [a bunch of changes](https://github.com/alik-git/openvla/compare/4995472..0214a0c) in the `openvla/prismatic/extern/hf/modeling_prismatic.py` and `openvla/experiments/robot/libero/run_libero_eval.py` files to get this to work. (This was super painful to figure out and took way longer than I thought it would)
+
+#### Moving on 
+Now with the missing dataset statistics issue fixed. If you try to run the base OpenVLA model on Libero, it performs poorly, meaning that this method cannot be used zero-shot i.e. "out-of-the-box", at least on the LIBERO benchmark. On 20 episodes of Libero Spatial (same as above, but 10x fewer episodes) it has a success rate of 0.
+
+```
+# episodes completed so far: 20
+# successes: 0 (0.0%)
+```
+
+Here is a comparison of the fintuned policy on LIBERO vs the non-finetuned policy. The task for both is "pick up the black bowl between the plate and the ramekin and place it on the plate" from the libero_spatial suite.
+
+Here is the fine-tuned policy
+
+TODO: Put finetuned video here.
+
+
+And here is the non-fine-tuned policy
+
+TODO: Put non-fine tuned video here.
+
+## Takeaway
+
+So the takeaway for now is that, like all other deep learning models, it only works well out-of-the-box on domains covered in the training dataset, as the authors themselves mention [here](https://github.com/openvla/openvla/tree/main?tab=readme-ov-file#vla-performance-troubleshooting). You need at least ~100 demos from your target domain robot for it to perform well.
+
+#### Original OpenVLA README continues below...
+
+
 # OpenVLA: An Open-Source Vision-Language-Action Model
 
 [![arXiv](https://img.shields.io/badge/arXiv-2406.09246-df2a2a.svg?style=for-the-badge)](https://arxiv.org/abs/2406.09246)
