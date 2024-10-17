@@ -34,12 +34,14 @@ Here is a comparison of the fintuned policy on LIBERO vs the non-finetuned polic
 
 Here is the fine-tuned policy
 
-TODO: Put finetuned video here.
+https://github.com/user-attachments/assets/7a0501b7-b928-48b2-a550-7326251c21f9
+
+
 
 
 And here is the non-fine-tuned policy
 
-TODO: Put non-fine tuned video here.
+https://github.com/user-attachments/assets/a0fe6346-c9be-4162-ac95-e6b52255f1a4
 
 ## Takeaway
 
